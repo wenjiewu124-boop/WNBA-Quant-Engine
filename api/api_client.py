@@ -31,13 +31,23 @@ def get_wnba_basketball_data(endpoint: str, params: dict = None) -> dict:
         raise ValueError("🚨 安全拦截: 缺少 API-Basketball 密钥，请检查 config.py 或 Secrets。")
     
     url = f"{BASKETBALL_API_URL}/{endpoint}"
-    # 强制加上 WNBA 联赛 ID (通常 WNBA id 为 143，根据实际 API 文档确认)
+    
     if params is None:
         params = {}
+        
+    # 【核心修复】：强制注入 WNBA 联赛 ID (143) 和赛季
+    if hasattr(config, 'WNBA_LEAGUE_ID'):
+        params['league'] = config.WNBA_LEAGUE_ID
+    else:
+        params['league'] = 143
+        
+    if 'season' not in params and hasattr(config, 'CURRENT_SEASON'):
+        params['season'] = config.CURRENT_SEASON
     
     response = requests.get(url, headers=BASKETBALL_HEADERS, params=params)
     response.raise_for_status()
     return response.json()
+
 
 # ==========================================
 # 2. The Odds API 接口封装
