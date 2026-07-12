@@ -35,3 +35,10 @@ GOOGLE_APPLICATION_CREDENTIALS = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
 # ==========================================
 # 设置当前赛季，用于 API 请求过滤等
 CURRENT_SEASON = 2026 
+# ==========================================
+# 4. 系统全局参数
+# ==========================================
+# 设置当前赛季，用于 API 请求过滤等
+CURRENT_SEASON = 2026 
+# WNBA 在 API-Basketball 中的官方联赛 ID 为 143
+WNBA_LEAGUE_ID = 143
