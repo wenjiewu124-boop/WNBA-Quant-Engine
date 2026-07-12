@@ -40,13 +40,11 @@ def run_daily_pipeline():
         # ==========================================
         logging.info("📥 [STEP 4] 开始拉取最新外部数据...")
         
-        # 建立数据字典缓存，保存真实数据
         api_data_cache = {}
         endpoints = ['games', 'teams', 'players', 'injuries']
         
         for endpoint in endpoints:
             try:
-                # 此时 api_client 已会自动带上 league=143 和 season=2026
                 data = api_client.get_wnba_basketball_data(endpoint=endpoint)
                 response_list = data.get("response", [])
                 api_data_cache[endpoint] = response_list
@@ -70,7 +68,6 @@ def run_daily_pipeline():
         # STEP 5: 调用阶段21 (生成 live_state_features)
         # ==========================================
         logging.info("🔄 [STEP 5] 启动阶段21：实时状态融合层 (stage21_live_fusion)...")
-        # 将拉取到的真实 API 数据流转进入 stage21
         live_features = stage21_live_fusion.run_fusion(
             games_list=api_data_cache.get('games', []),
             injuries_list=api_data_cache.get('injuries', [])
@@ -82,7 +79,6 @@ def run_daily_pipeline():
         # STEP 6: 调用阶段22 (生成 final_game_prediction)
         # ==========================================
         logging.info("📈 [STEP 6] 启动阶段22：盘口市场融合层 (stage22_market_fusion)...")
-        # 将阶段21的特征矩阵流转进入 stage22
         final_predictions = stage22_market_fusion.run_fusion(live_features)
         health_monitor.check_prediction_results(final_predictions)
         logging.info("✅ final_game_prediction 生成完毕。")
@@ -91,11 +87,9 @@ def run_daily_pipeline():
         # STEP 7: 调用结果输出模块
         # ==========================================
         logging.info("📤 [STEP 7] 启动输出模块 (prediction_output)...")
-        if hasattr(prediction_output, 'export_results'):
-            prediction_output.export_results()
-            logging.info("✅ 预测结果分发完毕。")
-        else:
-            logging.info("⚠️ prediction_output 业务代码暂未实装，跳过执行。")
+        # 直接调用新的 run_output，并传入 STEP 6 生成的数据
+        prediction_output.run_output(final_predictions)
+        logging.info("✅ 预测结果分发完毕。")
 
         # ==========================================
         # STEP 8: 记录运行日志
