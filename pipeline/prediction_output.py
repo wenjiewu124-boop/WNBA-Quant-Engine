@@ -20,7 +20,7 @@ def run_output(final_predictions: pd.DataFrame):
             game_id = row.get('game_id', 'N/A')
             home_team = row.get('home_team', 'N/A')
             away_team = row.get('away_team', 'N/A')
-            model_prob = row.get('model_probability', 'N/A')
+            final_prob = row.get('final_probability', 'N/A')  # 修复：同步字段名
             market_prob = row.get('market_probability', 'N/A')
             edge = row.get('edge', 'N/A')
             risk_level = row.get('risk_level', 'N/A')
@@ -28,7 +28,7 @@ def run_output(final_predictions: pd.DataFrame):
             print(f"Game ID: {game_id}")
             print(f"Home Team: {home_team}")
             print(f"Away Team: {away_team}")
-            print(f"Model Probability: {model_prob}")
+            print(f"Final Probability: {final_prob}")
             print(f"Market Probability: {market_prob}")
             print(f"Edge: {edge}")
             print(f"Risk Level: {risk_level}")
