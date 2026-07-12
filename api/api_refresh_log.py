@@ -1,61 +1,35 @@
-import requests
+import csv
 import os
+from datetime import datetime
 
-# 导入配置中心
-try:
-    import config
-except ImportError:
-    import sys
-    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    import config
+LOG_FILE = "api_refresh_history.csv"
 
-# ==========================================
-# API 基础配置
-# ==========================================
-BASKETBALL_API_URL = "https://v1.basketball.api-sports.io"
-BASKETBALL_HEADERS = {
-    'x-apisports-key': config.API_BASKETBALL_KEY
-}
-
-ODDS_API_URL = "https://api.the-odds-api.com/v4/sports/basketball_wnba/odds"
-
-# ==========================================
-# 1. API-Basketball 接口封装
-# ==========================================
-def get_wnba_basketball_data(endpoint: str, params: dict = None) -> dict:
+def log_api_request(api_name: str, request_status: str, data_count: int, error_message: str = "") -> dict:
     """
-    通用 API-Basketball 请求函数。
-    支持的 endpoint 示例: 'games', 'teams', 'players', 'injuries'
+    记录 API 请求日志。
+    输出至终端（供 GitHub Actions 捕获）并追加至本地 CSV 文件。
     """
-    if not config.API_BASKETBALL_KEY:
-        raise ValueError("🚨 安全拦截: 缺少 API-Basketball 密钥，请检查 config.py 或 Secrets。")
+    # 统一使用 ISO 格式时间戳
+    timestamp = datetime.now().isoformat()
     
-    url = f"{BASKETBALL_API_URL}/{endpoint}"
-    # 强制加上 WNBA 联赛 ID (通常 WNBA id 为 143，根据实际 API 文档确认)
-    if params is None:
-        params = {}
-    
-    response = requests.get(url, headers=BASKETBALL_HEADERS, params=params)
-    response.raise_for_status()
-    return response.json()
-
-# ==========================================
-# 2. The Odds API 接口封装
-# ==========================================
-def get_wnba_odds_data(regions: str = 'us', markets: str = 'h2h,spreads') -> list:
-    """
-    请求 The Odds API 获取 WNBA 实时盘口与开盘赔率数据。
-    """
-    if not config.ODDS_API_KEY:
-        raise ValueError("🚨 安全拦截: 缺少 The Odds API 密钥，请检查 config.py 或 Secrets。")
-    
-    params = {
-        'apiKey': config.ODDS_API_KEY,
-        'regions': regions,
-        'markets': markets,
-        'bookmakers': 'pinnacle,draftkings,fanduel' # 常用主流菠菜公司
+    log_entry = {
+        "timestamp": timestamp,
+        "api_name": api_name,
+        "request_status": request_status,
+        "data_count": data_count,
+        "error_message": error_message
     }
     
-    response = requests.get(ODDS_API_URL, params=params)
-    response.raise_for_status()
-    return response.json()
+    # 打印至标准输出，方便 GitHub Actions 日志面板直接监控
+    status_icon = "✅" if request_status.upper() == "SUCCESS" else "❌"
+    print(f"{status_icon} [API MONITOR] {timestamp} | {api_name} | Status: {request_status} | Count: {data_count} | Error: {error_message}")
+    
+    # 写入 CSV 持久化
+    file_exists = os.path.isfile(LOG_FILE)
+    with open(LOG_FILE, mode='a', newline='', encoding='utf-8') as f:
+        writer = csv.DictWriter(f, fieldnames=["timestamp", "api_name", "request_status", "data_count", "error_message"])
+        if not file_exists:
+            writer.writeheader()
+        writer.writerow(log_entry)
+        
+    return log_entry
