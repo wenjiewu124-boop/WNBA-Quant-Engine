@@ -19,7 +19,8 @@ _WNBA_LEAGUE_ID_CACHE = None
 
 def _get_wnba_league_id() -> int:
     """
-    按国家(USA)精确查询 WNBA 的真实 ID。
+    动态获取 WNBA 联赛 ID。
+    取消强绑定 country="USA"（因 API-Sports 可能将其归类为 World 或无国家标签）。
     """
     global _WNBA_LEAGUE_ID_CACHE
     if _WNBA_LEAGUE_ID_CACHE is not None:
@@ -28,32 +29,43 @@ def _get_wnba_league_id() -> int:
     url = f"{BASKETBALL_API_URL}/leagues"
     
     try:
-        # 核心修改：加上 country="USA" 作为过滤条件，精确锁定美国的联赛
-        params = {
-            "country": "USA",
-            "search": "WNBA" 
-        }
-        response = requests.get(url, headers=BASKETBALL_HEADERS, params=params)
+        # 第一步：直接用 search 关键词找（不加国家限制）
+        response = requests.get(url, headers=BASKETBALL_HEADERS, params={"search": "WNBA"})
         response.raise_for_status()
         
-        # 遍历返回的美国联赛列表，找到名称严格等于 "WNBA" 的联赛 ID
-        for item in response.json().get("response", []):
-            if str(item.get("name", "")).upper() == "WNBA":
+        results = response.json().get("response", [])
+        
+        # 优先精确匹配
+        for item in results:
+            if str(item.get("name", "")).strip().upper() == "WNBA":
                 _WNBA_LEAGUE_ID_CACHE = item.get("id")
                 return _WNBA_LEAGUE_ID_CACHE
                 
-        # 如果第一种查法没中，退一步获取美国的所有联赛自己遍历找
-        response_all_us = requests.get(url, headers=BASKETBALL_HEADERS, params={"country": "USA"})
-        response_all_us.raise_for_status()
-        for item in response_all_us.json().get("response", []):
-            if str(item.get("name", "")).upper() == "WNBA":
+        # 其次模糊匹配 (防备叫 "WNBA (Women)" 之类的名字)
+        for item in results:
+            if "WNBA" in str(item.get("name", "")).upper():
+                _WNBA_LEAGUE_ID_CACHE = item.get("id")
+                return _WNBA_LEAGUE_ID_CACHE
+
+        # 第二步：如果 search 没找到，拉取全球全部联赛进行地毯式搜索
+        response_all = requests.get(url, headers=BASKETBALL_HEADERS)
+        response_all.raise_for_status()
+        all_leagues = response_all.json().get("response", [])
+        
+        for item in all_leagues:
+            if str(item.get("name", "")).strip().upper() == "WNBA":
+                _WNBA_LEAGUE_ID_CACHE = item.get("id")
+                return _WNBA_LEAGUE_ID_CACHE
+                
+        for item in all_leagues:
+            if "WNBA" in str(item.get("name", "")).upper():
                 _WNBA_LEAGUE_ID_CACHE = item.get("id")
                 return _WNBA_LEAGUE_ID_CACHE
                 
     except Exception as e:
-        raise ValueError(f"拉取美国 WNBA 联赛 ID 失败: {str(e)}")
+        raise ValueError(f"拉取 WNBA 联赛 ID 失败: {str(e)}")
         
-    raise ValueError("🚨 无法在 API-Sports 美国 (USA) 目录下找到 WNBA，请检查 API 数据订阅情况。")
+    raise ValueError("🚨 全库地毯式搜索失败，无法在 API-Sports 中找到 WNBA，请检查 API 数据订阅情况。")
 
 def get_wnba_basketball_data(endpoint: str, params: dict = None) -> dict:
     """
