@@ -1,17 +1,6 @@
 import requests
-import os
+import config
 
-# 导入配置中心
-try:
-    import config
-except ImportError:
-    import sys
-    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    import config
-
-# ==========================================
-# API 基础配置
-# ==========================================
 BASKETBALL_API_URL = "https://v1.basketball.api-sports.io"
 BASKETBALL_HEADERS = {
     'x-apisports-key': config.API_BASKETBALL_KEY
@@ -19,53 +8,36 @@ BASKETBALL_HEADERS = {
 
 ODDS_API_URL = "https://api.the-odds-api.com/v4/sports/basketball_wnba/odds"
 
-# ==========================================
-# 1. API-Basketball 接口封装
-# ==========================================
 def get_wnba_basketball_data(endpoint: str, params: dict = None) -> dict:
     """
-    通用 API-Basketball 请求函数。
-    支持的 endpoint 示例: 'games', 'teams', 'players', 'injuries'
+    通用 API-Basketball 请求，自动携带 league 和 season 参数。
     """
     if not config.API_BASKETBALL_KEY:
-        raise ValueError("🚨 安全拦截: 缺少 API-Basketball 密钥，请检查 config.py 或 Secrets。")
+        raise ValueError("API-Basketball 密钥缺失。")
     
     url = f"{BASKETBALL_API_URL}/{endpoint}"
     
-    if params is None:
-        params = {}
-        
-    # 【核心修复】：强制注入 WNBA 联赛 ID (143) 和赛季
-    if hasattr(config, 'WNBA_LEAGUE_ID'):
-        params['league'] = config.WNBA_LEAGUE_ID
-    else:
-        params['league'] = 143
-        
-    if 'season' not in params and hasattr(config, 'CURRENT_SEASON'):
-        params['season'] = config.CURRENT_SEASON
+    # 初始化参数
+    query_params = params.copy() if params else {}
     
-    response = requests.get(url, headers=BASKETBALL_HEADERS, params=params)
+    # 强制注入 WNBA 联赛 ID 和赛季
+    query_params.setdefault('league', config.WNBA_LEAGUE_ID)
+    query_params.setdefault('season', config.CURRENT_SEASON)
+        
+    response = requests.get(url, headers=BASKETBALL_HEADERS, params=query_params)
     response.raise_for_status()
     return response.json()
 
-
-# ==========================================
-# 2. The Odds API 接口封装
-# ==========================================
 def get_wnba_odds_data(regions: str = 'us', markets: str = 'h2h,spreads') -> list:
-    """
-    请求 The Odds API 获取 WNBA 实时盘口与开盘赔率数据。
-    """
     if not config.ODDS_API_KEY:
-        raise ValueError("🚨 安全拦截: 缺少 The Odds API 密钥，请检查 config.py 或 Secrets。")
+        raise ValueError("The Odds API 密钥缺失。")
     
     params = {
         'apiKey': config.ODDS_API_KEY,
         'regions': regions,
         'markets': markets,
-        'bookmakers': 'pinnacle,draftkings,fanduel' # 常用主流菠菜公司
+        'bookmakers': 'pinnacle,draftkings,fanduel'
     }
-    
     response = requests.get(ODDS_API_URL, params=params)
     response.raise_for_status()
     return response.json()
