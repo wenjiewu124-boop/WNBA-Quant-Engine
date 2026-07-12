@@ -40,15 +40,23 @@ def run_daily_pipeline():
         # ==========================================
         logging.info("📥 [STEP 4] 开始拉取最新外部数据...")
         
+        # 建立数据字典缓存，保存真实数据
+        api_data_cache = {}
         endpoints = ['games', 'teams', 'players', 'injuries']
+        
         for endpoint in endpoints:
             try:
-                data = api_client.get_wnba_basketball_data(endpoint=endpoint, params={"season": config.CURRENT_SEASON})
-                data_count = len(data.get("response", []))
+                # 此时 api_client 已会自动带上 league=143 和 season=2026
+                data = api_client.get_wnba_basketball_data(endpoint=endpoint)
+                response_list = data.get("response", [])
+                api_data_cache[endpoint] = response_list
+                
+                data_count = len(response_list)
                 api_refresh_log.log_api_request(f"Basketball-API:{endpoint}", "SUCCESS", data_count)
             except Exception as e:
                 api_refresh_log.log_api_request(f"Basketball-API:{endpoint}", "FAILED", 0, str(e))
                 logging.warning(f"获取 {endpoint} 数据出现异常: {e}")
+                api_data_cache[endpoint] = []
 
         try:
             odds_data = api_client.get_wnba_odds_data()
@@ -62,8 +70,11 @@ def run_daily_pipeline():
         # STEP 5: 调用阶段21 (生成 live_state_features)
         # ==========================================
         logging.info("🔄 [STEP 5] 启动阶段21：实时状态融合层 (stage21_live_fusion)...")
-        # 直接调用，移除 hasattr 安全跳过逻辑
-        live_features = stage21_live_fusion.run_fusion()
+        # 将拉取到的真实 API 数据流转进入 stage21
+        live_features = stage21_live_fusion.run_fusion(
+            games_list=api_data_cache.get('games', []),
+            injuries_list=api_data_cache.get('injuries', [])
+        )
         health_monitor.check_data_quality(live_features, "live_state_features")
         logging.info("✅ live_state_features 生成完毕。")
 
@@ -71,7 +82,7 @@ def run_daily_pipeline():
         # STEP 6: 调用阶段22 (生成 final_game_prediction)
         # ==========================================
         logging.info("📈 [STEP 6] 启动阶段22：盘口市场融合层 (stage22_market_fusion)...")
-        # 直接调用，传入阶段21的结果
+        # 将阶段21的特征矩阵流转进入 stage22
         final_predictions = stage22_market_fusion.run_fusion(live_features)
         health_monitor.check_prediction_results(final_predictions)
         logging.info("✅ final_game_prediction 生成完毕。")
